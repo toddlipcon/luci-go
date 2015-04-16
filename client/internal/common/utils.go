@@ -39,3 +39,28 @@ func IsDirectory(path string) bool {
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
+
+// Semaphore is a classic semaphore.
+type Semaphore interface {
+	Wait()
+	Signal()
+}
+
+type semaphore chan bool
+
+// NewSemaphore returns a Semaphore of specified size.
+func NewSemaphore(size int) Semaphore {
+	s := make(semaphore, size)
+	for i := 0; i < cap(s); i++ {
+		s <- true
+	}
+	return s
+}
+
+func (s semaphore) Wait() {
+	<-s
+}
+
+func (s semaphore) Signal() {
+	s <- true
+}
