@@ -7,9 +7,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
+	"time"
 
+	"github.com/luci/luci-go/client/archiver"
 	"github.com/luci/luci-go/client/internal/common"
 	"github.com/luci/luci-go/client/isolateserver"
+	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
 
@@ -49,19 +53,20 @@ func (c *archiveRun) Parse(a subcommands.Application, args []string) error {
 }
 
 func (c *archiveRun) main(a subcommands.Application, args []string) error {
-	i := isolateserver.New(c.serverURL, c.namespace, c.compression, c.hashing)
-	caps, err := i.ServerCapabilities()
-	if err != nil {
-		return err
+	start := time.Now()
+	interrupt.HandleCtrlC()
+	is := isolateserver.New(c.serverURL, c.namespace, c.hashing, c.compression)
+	if len(c.dirs) != 0 {
+		return errors.New("-dirs is not yet implements")
 	}
 
-	fmt.Printf("Server:       %s\n", c.serverURL)
-	fmt.Printf("Capabilities: %#v\n", caps)
-	fmt.Printf("Namespace:    %s\n", c.namespace)
-	fmt.Printf("Dirs:         %s\n", c.dirs)
-	fmt.Printf("Files:        %s\n", c.files)
-	fmt.Printf("Blacklist:    %s\n", c.blacklist)
-	return errors.New("TODO")
+	archiver := archiver.New(is)
+	for _, file := range c.files {
+		archiver.PushFile(file)
+	}
+	duration := time.Now().Sub(start)
+	log.Printf("Took %s\n", duration)
+	return nil
 }
 
 func (c *archiveRun) Run(a subcommands.Application, args []string) int {

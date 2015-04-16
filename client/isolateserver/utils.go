@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"hash"
 	"io"
+	"os"
 	"strconv"
 )
 
@@ -35,6 +36,22 @@ func Hash(h hash.Hash, content []byte) HexDigest {
 	h.Reset()
 	h.Write(content)
 	return HexDigest(hex.EncodeToString(h.Sum(nil)))
+}
+
+// HashFile hashes a file and returns a DigestItem out of it.
+func HashFile(h hash.Hash, path string) (DigestItem, error) {
+	h.Reset()
+	f, err := os.Open(path)
+	if err != nil {
+		return DigestItem{}, err
+	}
+	defer f.Close()
+	size, err := io.Copy(h, f)
+	if err != nil {
+		return DigestItem{}, err
+	}
+	digest := HexDigest(hex.EncodeToString(h.Sum(nil)))
+	return DigestItem{digest, false, size}, nil
 }
 
 // Int is a JSON/Cloud Endpoints friendly int type that will correctly parse
