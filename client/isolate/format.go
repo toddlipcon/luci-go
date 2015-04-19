@@ -553,28 +553,22 @@ func (lhs *Configs) union(rhs *Configs) (*Configs, error) {
 func (lhs *Configs) getConfigVarsUnion(rhs *Configs) []string {
 	// Simple merge of two sorted ranges, eliminating same elements.
 	ls, rs := lhs.ConfigVariables, rhs.ConfigVariables
+	return mergeStringLists(ls, rs)
+}
+
+func mergeStringLists(ls []string, rs []string) []string {
 	varSet := make([]string, len(ls)+len(rs))
-	for i := 0; ; i++ {
-		assert(i < len(varSet))
-		if len(ls) == 0 {
-			rs, ls = ls, rs
-		}
-		if len(rs) == 0 {
-			i += copy(varSet[i:], ls)
-			return varSet[:i]
-		}
-		assert(len(rs) > 0 && len(ls) > 0)
-		if ls[0] > rs[0] {
-			ls, rs = rs, ls
-		}
-		if ls[0] < rs[0] {
-			varSet[i] = ls[0]
-			ls = ls[1:]
-		} else {
-			varSet[i] = ls[0]
-			ls, rs = ls[1:], rs[1:]
+	i := copy(varSet, ls)
+	copy(varSet[i:], rs)
+	sort.Strings(varSet)
+	j := 0
+	for i := 0; i < len(varSet); i++ {
+		if i == 0 || varSet[i] != varSet[j - 1] {
+			varSet[j] = varSet[i]
+			j++
 		}
 	}
+	return varSet[0:j]
 }
 
 // expandConfigVariables returns new configPair list for newConfigVars.

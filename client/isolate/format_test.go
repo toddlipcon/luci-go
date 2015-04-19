@@ -30,6 +30,15 @@ func TestAssert(t *testing.T) {
 	}
 }
 
+func TestMerge(t *testing.T) {
+	ut.AssertEqual(t, []string{"a", "c", "d", "e", "f"},
+		mergeStringLists([]string{"a", "c", "e"},
+			[]string{"a", "d", "e", "f"}))
+
+	ut.AssertEqual(t, []string{},
+		mergeStringLists([]string{}, []string{}))
+}
+
 func TestConditionJson(t *testing.T) {
 	c := condition{Condition: "OS == \"Linux\""}
 	c.Variables.ReadOnly = new(int)
