@@ -128,7 +128,7 @@ func (c *batchArchiveRun) main(a subcommands.Application, args []string) error {
 			return fmt.Errorf("Invalid dir %s in %s", data.Dir, genJsonPath)
 		}
 		if opts, err := parseArchiveCMD(data.Args, data.Dir); err != nil {
-			return err
+			return fmt.Errorf("Invalid archive command in %s: %s", genJsonPath, err)
 		} else {
 			trees = append(trees, isolate.Tree{data.Dir, *opts})
 		}
