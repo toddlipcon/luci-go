@@ -5,6 +5,9 @@
 package isolate
 
 import (
+	"fmt"
+	"path/filepath"
+	"io/ioutil"
 	"regexp"
 
 	"github.com/luci/luci-go/client/internal/common"
@@ -49,7 +52,79 @@ func (a *ArchiveOptions) Init() {
 	a.ConfigVariables = common.KeyValVars{}
 }
 
+func replaceVars(str string, opts ArchiveOptions) string {
+	r := regexp.MustCompile("<\\(" + ValidVariable + "?\\)")
+	return r.ReplaceAllStringFunc(str, func(match string)string {
+		var_name := match[2:len(match) - 1]
+		if v, ok := opts.PathVariables[var_name]; ok {
+			return v
+		}
+		if v, ok := opts.ExtraVariables[var_name]; ok {
+			return v
+		}
+		if v, ok := opts.ConfigVariables[var_name]; ok {
+			return v
+		}
+		panic("No value for variable " + var_name)
+	})
+
+}
+
+type loadedIsolate struct {
+	Dependencies []string
+	IsolateDir string
+}
+
+func loadIsolate(tree Tree) (*loadedIsolate, error) {
+	rel_path := filepath.Join(tree.Cwd, tree.Opts.Isolate)
+	content, err := ioutil.ReadFile(rel_path)
+	if err != nil {
+		return nil, err
+	}
+
+	_, deps, _, isolate_dir, err := LoadIsolateForConfig(tree.Cwd, content, tree.Opts.ConfigVariables)
+	if err != nil {
+		return nil, err
+	}
+
+	loaded := new(loadedIsolate)
+	loaded.IsolateDir = isolate_dir
+	loaded.Dependencies = make([]string, len(deps))
+	for i, dep := range deps {
+		loaded.Dependencies[i] = replaceVars(dep, tree.Opts)
+	}
+	return loaded, nil
+}
+
 func IsolateAndArchive(trees []Tree, namespace string, server string) (
 	map[string]string, error) {
+
+	all_loaded := []*loadedIsolate{}
+	for _, tree := range trees {
+		loaded, err := loadIsolate(tree)
+		if err != nil {
+			return nil, err
+		}
+		all_loaded = append(all_loaded, loaded)
+	}
+
+	info_loader := LoadOrCreateCache()
+	defer info_loader.Save()
+
+	for _, loaded := range all_loaded {
+		fmt.Printf("%+v\n", loaded)
+
+		for _, dep := range loaded.Dependencies {
+			infos, err := info_loader.LookupRecursive(filepath.Join(loaded.IsolateDir, dep))
+			if err != nil {
+				return nil, err
+			}
+			for _, info := range infos {
+				fmt.Printf("%s\t%+v\n", dep, info)
+			}
+		}
+	}
+
+
 	return nil, nil
 }

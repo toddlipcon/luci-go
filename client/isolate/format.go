@@ -837,6 +837,7 @@ func LoadIsolateForConfig(isolateDir string, content []byte, configVariables com
 	if err != nil {
 		return nil, nil, NotSet, "", err
 	}
+	fmt.Print(isolate.ConfigVariables)
 	configName := configName{}
 	missingVars := []string{}
 	for _, variable := range isolate.ConfigVariables {
