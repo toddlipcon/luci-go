@@ -98,3 +98,17 @@ func (c *isolateFlags) Parse() error {
 	}
 	return nil
 }
+
+func (c *isolateFlags) RequireIsolateFile() error {
+	if c.Isolate == "" {
+		return errors.New("-isolate must be specified")
+	}
+	return nil
+}
+
+func (c *isolateFlags) RequireIsolatedFile() error {
+	if c.Isolated == "" {
+		return errors.New("-isolated must be specified")
+	}
+	return nil
+}
