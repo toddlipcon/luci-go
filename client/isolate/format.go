@@ -489,7 +489,9 @@ func (c *Configs) GetConfig(configName configName) (out *ConfigSettings, err err
 			}
 		}
 		if ok {
-			if out, err = out.union(pair.value); err != nil {
+			if out == nil {
+				out = pair.value
+			} else if out, err = out.union(pair.value); err != nil {
 				return
 			}
 		}
@@ -698,7 +700,7 @@ func (lhs *ConfigSettings) union(rhs *ConfigSettings) (*ConfigSettings, error) {
 	}
 
 	// TODO(tandrii): implement path.Rel equivalent, as these paths are POSIX.
-	rebasePath, err := filepath.Rel(rRelCwd, lRelCwd)
+	rebasePath, err := filepath.Rel(lRelCwd, rRelCwd)
 	if err != nil {
 		return nil, err
 	}
