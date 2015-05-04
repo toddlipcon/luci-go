@@ -30,9 +30,12 @@ func GetHash() hash.Hash {
 // It must be closed after use.
 //
 // It is currently hardcoded to RFC 1950 (zlib).
-func GetDecompressor(in io.Reader) io.ReadCloser {
-	d, _ := zlib.NewReader(in)
-	return d
+func GetDecompressor(in io.Reader) (io.ReadCloser, error) {
+	d, err := zlib.NewReader(in)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // GetCompressor returns a fresh instance of the compression algorithm.

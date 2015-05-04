@@ -5,6 +5,7 @@
 package isolated
 
 import (
+	"bytes"
 	"encoding/hex"
 	"hash"
 	"io"
@@ -46,4 +47,15 @@ func HashFile(path string) (DigestItem, error) {
 		return DigestItem{}, err
 	}
 	return DigestItem{Digest: Sum(h), IsIsolated: false, Size: size}, nil
+}
+
+func CompressBytes(content []byte) []byte {
+	var b bytes.Buffer
+	c := GetCompressor(&b)
+	io.Copy(c, bytes.NewBuffer(content))
+	if err := c.Close(); err != nil {
+		panic(err)
+	}
+
+	return b.Bytes()
 }

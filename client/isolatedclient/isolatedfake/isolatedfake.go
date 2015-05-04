@@ -182,7 +182,13 @@ func (server *isolatedFake) fakeCloudStorage(w http.ResponseWriter, r *http.Requ
 		server.Fail(fmt.Errorf("invalid method: %s", r.Method))
 		return
 	}
-	raw, err := ioutil.ReadAll(isolated.GetDecompressor(r.Body))
+        decomp, err := isolated.GetDecompressor(r.Body)
+        if err != nil {
+                w.WriteHeader(500)
+                server.Fail(err)
+                return
+        }
+	raw, err := ioutil.ReadAll(decomp)
 	if err != nil {
 		w.WriteHeader(500)
 		server.Fail(err)
@@ -252,7 +258,11 @@ func (server *isolatedFake) storeInline(r *http.Request) interface{} {
 		server.Fail(err)
 		return map[string]string{"err": err.Error()}
 	}
-	raw, err := ioutil.ReadAll(isolated.GetDecompressor(bytes.NewBuffer(data.Content)))
+	comp, err := isolated.GetDecompressor(bytes.NewBuffer(data.Content))
+	if err != nil {
+		server.Fail(err)
+	}
+	raw, err := ioutil.ReadAll(comp)
 	if err != nil {
 		server.Fail(err)
 		return map[string]string{"err": err.Error()}
