@@ -38,14 +38,10 @@ type saServer struct {
 	log     io.Writer
 }
 
-type jsonAPI func(body io.Reader) interface{}
-
-type failure interface {
-	Fail(err error)
-}
+type jsonAPI func(body io.Reader) (interface{}, error)
 
 // handlerJSON converts a jsonAPI http handler to a proper http.Handler.
-func handlerJSON(f failure, handler jsonAPI) http.Handler {
+func handlerJSON(handler jsonAPI) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Request for " + r.URL.String())
 		contentType := "application/json; charset=utf-8"
@@ -54,9 +50,14 @@ func handlerJSON(f failure, handler jsonAPI) http.Handler {
 			return
 		}
 		defer r.Body.Close()
-		out := handler(r.Body)
+		out, err := handler(r.Body)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		if err := writeJsonResponse(w, out); err != nil {
-			f.Fail(err)
+			writeError(w, err)
+			return
 		}
 	})
 }
@@ -80,35 +81,27 @@ func (s *saServer) handleFunc(path string, f func(http.ResponseWriter, *http.Req
 }
 
 func (s *saServer) handleJSON(path string, handler jsonAPI) {
-	s.handle(path, handlerJSON(s, handler))
+	s.handle(path, handlerJSON(handler))
 }
 
-func (server *saServer) serverDetails(body io.Reader) interface{} {
+func (server *saServer) serverDetails(body io.Reader) (interface{}, error) {
 	content, err := ioutil.ReadAll(body)
 	if err != nil {
-		server.Fail(err)
+		return nil, err
 	}
 	if string(content) != "{}" {
-		server.Fail(fmt.Errorf("unexpected content %#v", string(content)))
+		return nil, fmt.Errorf("unexpected content %#v", string(content))
 	}
-	return map[string]string{"server_version": "v1"}
+	return map[string]string{"server_version": "v1"}, nil
 }
 
-func (server *saServer) Fail(err error) {
-	server.lock.Lock()
-	defer server.lock.Unlock()
-	if server.err == nil {
-		server.err = err
-	}
-}
-
-func (server *saServer) preupload(body io.Reader) interface{} {
+func (server *saServer) preupload(body io.Reader) (interface{}, error) {
 	data := &isolated.DigestCollection{}
 	if err := json.NewDecoder(body).Decode(data); err != nil {
-		server.Fail(err)
+		return nil, err
 	}
 	if data.Namespace.Namespace != "default-gzip" {
-		server.Fail(fmt.Errorf("unexpected namespace %#v", data.Namespace.Namespace))
+		return nil, fmt.Errorf("unexpected namespace %#v", data.Namespace.Namespace)
 	}
 	out := &isolated.URLCollection{}
 
@@ -120,55 +113,53 @@ func (server *saServer) preupload(body io.Reader) interface{} {
 			out.Items = append(out.Items, isolated.PreuploadStatus{"", ticket, isolated.Int(i)})
 		}
 	}
-	return out
+	return out, nil
 }
 
-func (server *saServer) finalizeGSUpload(body io.Reader) interface{} {
+func (server *saServer) finalizeGSUpload(body io.Reader) (interface{}, error) {
 	data := &isolated.FinalizeRequest{}
 	if err := json.NewDecoder(body).Decode(data); err != nil {
-		server.Fail(err)
+		return nil, err
 	}
 
 	server.lock.Lock()
 	defer server.lock.Unlock()
-	return map[string]string{"ok": "true"}
+	return map[string]string{"ok": "true"}, nil
 }
 
-func (server *saServer) storeInline(body io.Reader) interface{} {
+func (server *saServer) storeInline(body io.Reader) (interface{}, error) {
 	data := &isolated.StorageRequest{}
 	if err := json.NewDecoder(body).Decode(data); err != nil {
-		server.Fail(err)
+		return nil, err
 	}
 
 	prefix := "ticket:"
 	if !strings.HasPrefix(data.UploadTicket, prefix) {
-		server.Fail(fmt.Errorf("unexpected ticket %#v", data.UploadTicket))
+		return nil, fmt.Errorf("unexpected ticket %#v", data.UploadTicket)
 	}
 
 	digest := isolated.HexDigest(data.UploadTicket[len(prefix):])
 	if !digest.Validate() {
-		server.Fail(fmt.Errorf("invalid digest %#v", digest))
+		return nil, fmt.Errorf("invalid digest %#v", digest)
 	}
 
 	err := server.storage.Write(digest, bytes.NewBuffer(data.Content))
 	if err != nil {
-		// TODO: respond with error, dont panic
-		server.Fail(err)
+		return nil, err
 	}
 
-	return map[string]string{"ok": "true"}
+	return map[string]string{"ok": "true"}, nil
 }
 
 func (server *saServer) accountsSelf(w http.ResponseWriter, r *http.Request) {
-	log.Println("handing accountsSelf")
 	ret := map[string]string{"identity": "anonymous:todd@lipcon.org"}
 	if err := writeJsonResponse(w, ret); err != nil {
-		panic(err)
+		writeError(w, err)
+		return
 	}
 }
 
 func (server *saServer) oauthConfig(w http.ResponseWriter, r *http.Request) {
-	log.Println("handing oauthConfig")
 	ret := map[string]string{"additional_client_ids": "",
 		"client_id":            "x",
 		"client_not_so_secret": "y",
@@ -181,26 +172,29 @@ func (server *saServer) oauthConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *saServer) retrieveContent(w http.ResponseWriter, r *http.Request) {
-	log.Println("handing retrieve")
-	log.Printf("retrieve: %v\n", r)
 	re := regexp.MustCompile("^/content-gs/retrieve/default-gzip/(.+)$")
 	hash := re.FindStringSubmatch(r.URL.Path)[1]
-	log.Printf("hash: %s\n", hash)
-
 	data_reader, err := server.storage.Read(isolated.HexDigest(hash))
 	defer data_reader.Close()
 	if err != nil {
-		// TODO: dont crash
-		panic(err)
+		writeError(w, err)
+		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	io.Copy(w, data_reader)
 }
 
+func writeError(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(err.Error()))
+	return
+}
+
 func New() *saServer {
 	s := &saServer{
 		mux:     http.NewServeMux(),
-		storage: storage.NewMemory(),
+		storage: storage.NewLocalFs("/tmp/storage"),
 		log:     os.Stderr,
 	}
 	s.handleJSON("/_ah/api/isolateservice/v1/server_details", s.serverDetails)
@@ -219,7 +213,7 @@ func New() *saServer {
 
 func main() {
 	server := New()
-	err := endless.ListenAndServe("localhost:4242", server.mux)
+	err := endless.ListenAndServe("0.0.0.0:4242", server.mux)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
