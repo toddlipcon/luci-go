@@ -7,7 +7,6 @@ package lhttp
 import (
 	"errors"
 	"net/url"
-	"strings"
 )
 
 // URLToHTTPS ensures the url is https://.
@@ -16,10 +15,10 @@ func URLToHTTPS(s string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if u.Scheme != "" && u.Scheme != "https" {
-		return "", errors.New("Only https:// scheme is accepted. It can be omitted.")
+	if u.Scheme != "" && u.Scheme != "https" && u.Scheme != "http" {
+		return "", errors.New("Only http:// or https:// scheme is accepted.")
 	}
-	if !strings.HasPrefix(s, "https://") {
+	if u.Scheme == "" {
 		s = "https://" + s
 	}
 	if _, err = url.Parse(s); err != nil {
