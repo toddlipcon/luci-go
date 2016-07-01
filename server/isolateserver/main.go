@@ -188,6 +188,7 @@ func writeError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write([]byte(err.Error()))
+	log.Println(err.Error())
 	return
 }
 
