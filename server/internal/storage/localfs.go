@@ -59,14 +59,15 @@ func (fs *localfs) Write(digest isolated.HexDigest, r io.Reader) error {
 		return errors.New("invalid digest")
 	}
 	path := fs.path(digest)
-	if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
+	dir_path := filepath.Dir(path)
+	if err := os.MkdirAll(dir_path, 0777); err != nil {
 		return err
 	}
-	tmp_path := path + ".tmp"
-	file_w, err := os.OpenFile(tmp_path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	file_w, err := ioutil.TempFile(dir_path, filepath.Base(path)+".tmp")
 	if err != nil {
 		return err
 	}
+	tmp_path := file_w.Name()
 	success := false
 	defer func() {
 		if !success {
