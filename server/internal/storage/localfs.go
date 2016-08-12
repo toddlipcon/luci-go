@@ -79,6 +79,7 @@ func (fs *localfs) Write(digest isolated.HexDigest, r io.Reader) error {
 	// r -> file_w
 	//   -> pipe -> decompress -> hasher
 	pipe_r, pipe_w := io.Pipe()
+	defer pipe_r.Close()
 	tee := io.TeeReader(r, pipe_w)
 	hasher := isolated.GetHash()
 	err_ch := make(chan error)
