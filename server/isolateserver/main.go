@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"regexp"
 	"strings"
@@ -212,7 +213,14 @@ func New() *saServer {
 	return s
 }
 
+func StartPProfServer() {
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:4243", nil))
+	}()
+}
+
 func main() {
+	StartPProfServer()
 	server := New()
 	err := endless.ListenAndServe("0.0.0.0:4242", server.mux)
 	if err != nil {
